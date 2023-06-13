@@ -10,7 +10,12 @@ pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "ggraph","psych","nortest","rgl","car","ggside","tidyquant","olsrr",
              "jtools","ggstance","magick","cowplot","emojifont","beepr","Rcpp",
              "equatiomatic", "lpyr","sparklyr","arrow","nlme","reticulate",
-             "mlflow", "stats","glue", "renv")
+             "mlflow", "stats","glue", "renv", "gridExtra","forecast","TTR",
+             "smooth", "tsibble", "fable","tsibbledata", "fpp3","lubridate",
+             "urca", "dygraphs", "quantmod","BETS","tseries","FinTS","feasts",
+             "gridExtra", "scales", "caret","xtable", "tsutils","GetBCBData", 
+             "quantmod","dgof","seasonal","devtools","transformr","gganimate")
+
 
 options(rgl.debug = TRUE)
 
@@ -26,7 +31,6 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
 
 
 renv::init()
-usethis::edit_r_environ(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)
 
 #Conhecendo a base de dados
 
@@ -106,7 +110,7 @@ calendar_df$price <- str_replace_all(calendar_df$price,'[$]','')
 calendar_df$price <- str_replace_all(calendar_df$price,',','')
 calendar_df$price <- as.numeric(calendar_df$price)
 
-unique(calendar_df$month)
+unique(calendar_df$price)
 
 #grafico line 
 price_month <- calendar_df %>%
@@ -213,13 +217,53 @@ listing_df <- subset(listing_df, select = -c(last_scraped, calendar_last_scraped
 
 #Tratando outliers
 
+#=====================beds=========================================#
+ggplot(listing_df, aes(x=beds)) + 
+  geom_boxplot()
 
+beds_out = listing_df$beds
 
-#Modelagem (Série temporal)
+q1 = quantile(listing_df$beds, 0.25, na.rm = TRUE) #1º quartil
+q3 = quantile(listing_df$beds, 0.75, na.rm = TRUE) #3º quartil
+iq = q3 - q1 #interquartil
+lim_inf = q1 - 1.5*iq #limite inferior
+lim_sup = q3 + 1.5*iq #limite superior
 
-#price vs month
+beds_out > lim_sup #mostrará acima do limite superior
+beds_out < lim_inf #mostrará abaixo do limite inferior
 
+#retirando outliers
+out = (beds_out > lim_sup) | (beds_out < lim_inf)
+beds_out[out] = NA #retirando outliers
+boxplot(beds_out)
+boxplot(listing_df$beds)
 
+#===================bedrooms========================================#
+ggplot(listing_df, aes(x=bedrooms)) + 
+  geom_boxplot()
+
+bedrooms_out = listing_df$bedrooms #criando variável cópia
+
+#calculando os quartis
+q1_br = quantile(listing_df$bedrooms, 0.25, na.rm = TRUE) #1º quartil
+q3_br = quantile(listing_df$bedrooms, 0.75, na.rm = TRUE) #3º quartil
+iq_br = q3 - q1 #interquartil
+lim_inf_br = q1 - 1.5*iq #limite inferior
+lim_sup_br = q3 + 1.5*iq #limite superior
+
+bedrooms_out > lim_sup #mostrará acima do limite superior
+bedrooms_out < lim_inf #mostrará abaixo do limite inferior
+
+#retirando outliers
+out_br = (bedrooms_out > lim_sup) | (bedrooms_out < lim_inf)
+bedrooms_out[out] = NA #retirando outliers
+boxplot(bedrooms_out)
+boxplot(listing_df$bedrooms)
+
+boxplot(listing_df$price)
+              
+#==============================================================================#        
+        
 #Modelagem Regressão Múltipla
 
 #  1.  Rodar modelo dropando os NA 
