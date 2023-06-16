@@ -2,9 +2,16 @@
 # PROJETO AIRBNB BUENOS AIRES               
 ################################################################################
 
+#Business Understanding
+
+#Neste projeto busco responder as seguintes questões: 
+
+  #Qual o melhor período para alugar um AirBnb nem Buenos Aires?
+  #Quais recursos são mais importantes para listar preços?
+
+renv::init()
+
 #instalando pacotes necessários
-
-
 pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "splines","reshape2","PerformanceAnalytics","correlation","see",
              "ggraph","psych","nortest","rgl","car","ggside","tidyquant","olsrr",
@@ -29,36 +36,32 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
   sapply(pacotes, require, character = T) 
 }
 
+#loading data
+listing_df <- read_csv('listings.csv') #contém conjunto de dados airbnb completo de Buenos Aires
+calendar_df <- read.csv("calendar.csv") #contém o preço de cada listagem durante o período de um ano
 
-renv::init()
+#Data Understanding
+head(listing_df)
+print(paste("o dataset tem",nrow(listing_df), "linhas e", ncol(listing_df), "colunas."))
 
-#Conhecendo a base de dados
-
-listing_df <- read_csv('listings.csv')
-
-colnames(listing_df)
-
-#verificando a quantidade de NA em cada coluna
-sapply(listing_df, function(x) sum(is.na(x)))
-
-#Verificar a quantidade de zeros em cada coluna
-ldply(listing_df, function(c) sum(c == 0))
-
-
-#Entendendo os dados
-
-ggplotly(
-  ggplot(listing_df, aes(x=neighbourhood_cleansed, fill=neighbourhood_cleansed))+
-    geom_bar()
-)
-
-
-#Os bairros com maiores quantidades de listagens disponíveis são: Palermo, recoleta, San Nicolas,Belgrano, Retiro. 
-#Então se você pensa em visitar buenos Aires, esses bairros podem ser uma boa opção para começar a buscar abrigo. 
+#Pra começar vamos observar os 15 bairros mais listados através da coluna neighbourhood_cleansed.
+listing_df %>% 
+  group_by(neighbourhood_cleansed) %>% 
+  summarise(qtd_bairros = n()) %>% 
+  slice_max(qtd_bairros, n=15) %>%
+  mutate(neighbourhood_cleansed = reorder(neighbourhood_cleansed, -qtd_bairros)) %>% 
+  ggplot(aes(x = neighbourhood_cleansed, y = qtd_bairros, fill=neighbourhood_cleansed)) +
+  theme(axis.text.x = element_text(angle = 90))+
+  geom_col()
+  
+  #-------------------------------------------------------------#
+    #Caso você vá até Buenos Aires, estes são os bairros em que 
+   #você tem maiores chances de encontrar uma acomodação.
+  #-------------------------------------------------------------#
 
 
 #Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
-#Para calcular a média, precisamos organizar a col price, removendo $ e a vírgula.
+#Para calcular a média, precisamos fazer uns ajustes na coluna "price", removendo $ e a vírgula.
 
 listing_df$price <- str_replace_all(listing_df$price,'[$]','')
 listing_df$price <- str_replace_all(listing_df$price,',','')
@@ -72,9 +75,12 @@ listing_df %>%
                 full_width = F,
                 font_size = 22)
 
+    #-------------------------------------------------------------#
+      #Quando se vai a Buenos Aires é mais caro ficar em hotel. 
+      #Entretando é um pouco estranho que um Private room seja mais
+      #barato que um Shared room, você não acha? Vamos investigar isso? 
+    #-------------------------------------------------------------#
 
-#Quando se vai a buenos aires é mais caro ficar em hotel. Entretando é um pouco estranho que um Private room seja mais
-#barato que um Shared room, você não acha? Vamos investigar isso? 
 
 #Vamos ver como os preços se distribuem em função de cada tipo de quarto, quem sabe alguns outliers estejam alterando
 #o valor médio dos tipos de quarto. 
@@ -86,8 +92,8 @@ ggplotly(
     theme_classic()
 )
 
-#BINGO! Como a média esta sendo manipulada pelos outliers, vou analisar a mediana, que por ser menos sensível a outliers
-#podem me dar um valor mais adequado a cerca dos typos de quartos.
+#BINGO! Como a média esta sendo manipulada pelos outliers, vou analisar a mediana, que por ser menos sensível a outliers,
+#pode me dar um valor mais adequado a cerca dos tipos de quartos. Outilers serão tratados posteriormente. 
 
 listing_df %>%
   group_by(room_type) %>%
@@ -99,20 +105,16 @@ listing_df %>%
 
 #Agora podemos concluir que os quartos compartilhados são os mais baratos. Tudo faz mais sentido agora, não acha? :)
 
-calendar_df <- read.csv("calendar.csv")
 
+#O preço dos imóveis mudam significativamente ao longo do ano? 
 calendar_df$date <- as.Date(calendar_df$date)
 calendar_df['month'] <- (format(calendar_df$date, '%Y-%m'))
 calendar_df$month <- as.factor(calendar_df$month)
-
-glimpse(calendar_df$month)
 calendar_df$price <- str_replace_all(calendar_df$price,'[$]','')
 calendar_df$price <- str_replace_all(calendar_df$price,',','')
 calendar_df$price <- as.numeric(calendar_df$price)
 
-unique(calendar_df$price)
-
-#grafico line 
+#preço em função da mediana de preço 
 price_month <- calendar_df %>%
   group_by(month) %>%
   summarise(median_price = median(price)) %>%
@@ -120,16 +122,31 @@ price_month <- calendar_df %>%
   geom_line(color='green') +
   geom_point() +
   theme(axis.text.x = element_text(angle=90)) +
-  labs(x= 'Month', y= 'Price',
+  labs(x= 'Month', y= 'Median Price',
        title = 'Price per month') +
   theme_classic()
 price_month
 
-#Limpando o dataset
+
+#Verificando correlações
+
+names(listing_df)
+chart.Correlation((listing_df_1[,c(22,18,19,20)]), histogram = TRUE)
+
+#Pelo visto o preço não é tão influenciado assim pela quantidade de banheiros, quartos e camas, já que a correção entre o preço
+#e essas variáveis não é tão elevada. 
+
+
+#Data Preparation
+
+#verificando a quantidade de NA em cada coluna
+sapply(listing_df, function(x) sum(is.na(x)))
+
+#Verificar a quantidade de zeros em cada coluna
+ldply(listing_df, function(c) sum(c == 0))
 
 #Excluindo colunas vazias, com url, localização, comentários, nomes do host pois não serão usadas nesta análise.
-
-listing_df <- subset(listing_df, select = -c(listing_url, scrape_id, picture_url,host_id, host_url, 
+listing_df <- subset(listing_df, select = -c(id, listing_url, scrape_id, picture_url,host_id, host_url, 
                                              host_thumbnail_url, host_picture_url, neighbourhood_group_cleansed,
                                              review_scores_value, calendar_updated, license, bathrooms,neighbourhood,
                                              neighborhood_overview, host_neighbourhood, host_location, host_response_rate, 
@@ -141,6 +158,7 @@ listing_df <- subset(listing_df, select = -c(listing_url, scrape_id, picture_url
 unique(listing_df$neighbourhood_cleansed)
 table(listing_df$neighbourhood_cleansed)
 
+#Preparando colunas 
 #A coluna bathrooms está vazia e foi excluída, pois na verdade, a quantidade de bathrooms está
 #em bathrooms_text, que precisa de alguns ajustes. Vamos fazer isso agora.
 
@@ -155,13 +173,12 @@ listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'half-','
 listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'Half-','')
 listing_df$bathrooms_text <- as.numeric(listing_df$bathrooms_text)
 
-#Bedrooms tem 3058 valores NA. Talvez o anfitrião tenha considerado quarto-sala. Vou inserir
+#Bedrooms tem 3058 valores NA. Talvez esse imóvel seja um studio, quarta-sala ou algo to tipo. Vou inserir
 #o valor 1 no lugar, assim como beds, pois pode ser sofá-cama. 
 
 listing_df$beds[is.na(listing_df$beds)] <- 1
 listing_df$bedrooms[is.na(listing_df$bedrooms)] <- 1
 listing_df$bathrooms_text[is.na(listing_df$bathrooms_text)] <- 1
-unique(listing_df$bathrooms_text) 
 
 #review_per_month (float) = 4122 NA
 #number_of_reviews(int)= 4122 ZEROS
@@ -171,127 +188,214 @@ unique(listing_df$bathrooms_text)
 listing_df$number_of_reviews[is.na(listing_df$number_of_reviews)] <- 0
 listing_df$reviews_per_month[is.na(listing_df$reviews_per_month)] <- 0
 
-#Análisar as variáveis categóricas
-
-#source possui apenas 2 níveis. Vamos transformar em factor.
-
-listing_df$source <- as.factor(listing_df$source)
-glimpse(listing_df$source)
-
 #Transformando variáveis em factor 
-
-
+listing_df$source <- as.factor(listing_df$source)
 listing_df$property_type <- as.factor(listing_df$property_type)
+listing_df$host_response_time[is.na(listing_df$host_response_time)] <- "did not inform"
 listing_df$host_response_time <- as.factor(listing_df$host_response_time)
-listing_df$host_response_time <- droplevels(listing_df$host_response_time, exclude = "N/A")
 listing_df$neighbourhood_cleansed <- as.factor(listing_df$neighbourhood_cleansed)
 listing_df$room_type <- as.factor(listing_df$room_type)
 
-unique(listing_df$host_response_time) #usar sempre esse comando p/ conferir se tudo ocorreu bem.
-
-#Tratando host_verification
+#host_verification
 listing_df$host_verifications[listing_df$host_verifications == '[]'] <- 1
 listing_df$host_verifications <- as.factor(listing_df$host_verifications)
 listing_df$host_verifications <- droplevels(listing_df$host_verifications, exclude = 1)
 
-#Tratando amenities
+#amenities
 listing_df$amenities <- lengths(gregexpr(",", listing_df$amenities)) + 1L
-glimpse(listing_df$amenities)
 
-
-#Tratando host_acceptance_rate
+#host_acceptance_rate
 listing_df$host_acceptance_rate <- str_remove_all(listing_df$host_acceptance_rate, '[%]')
 listing_df$host_acceptance_rate <- as.numeric(listing_df$host_acceptance_rate)
-unique(listing_df$host_acceptance_rate)
 
-#Tratando data
-
+#data
 listing_df$host_since <- as.Date(listing_df$host_since)
 listing_df$host_since <- (format(listing_df$host_since, '%Y-%m'))
 listing_df$host_since <- as.factor(listing_df$host_since)
-glimpse(listing_df$host_since)
+
 
 #Depois de uma breve análise, observei que as variáveis abaixo não são relevantes,portanto, vamos excluí-las.
-
 listing_df <- subset(listing_df, select = -c(last_scraped, calendar_last_scraped))
 
 #Tratando outliers
+#Criei uma função para tratar o outliers
+quartil <- function(column){
+  
+  q1 <- quantile(column, 0.25, na.rm = TRUE) #1º quartil
+  q3 <- quantile(column, 0.75, na.rm = TRUE) #3º quartil
+  iq <- q3 - q1 #interquartil
+  lim_sup <- q3 + 1.5*iq #limite superior
+  return(lim_sup)
+  
+}
+max_beds<- quartil(listing_df$beds)
+max_bedrooms <- quartil(listing_df$bedrooms)
+max_bathrooms <- quartil(listing_df$bathrooms_text)
+max_price <- quartil(listing_df$price)
 
-#=====================beds=========================================#
-ggplot(listing_df, aes(x=beds)) + 
-  geom_boxplot()
+print(paste("beds:",max_beds, "bedrooms:", max_bedrooms, "bathrooms:", max_bathrooms, "price:", max_price))
 
-beds_out = listing_df$beds
+#Agora vou descartar qualquer linha onde preço esteja acima do limite superior
+#beds > 3.5, bedrooms > 1 e bathroms > 2.25
 
-q1 = quantile(listing_df$beds, 0.25, na.rm = TRUE) #1º quartil
-q3 = quantile(listing_df$beds, 0.75, na.rm = TRUE) #3º quartil
-iq = q3 - q1 #interquartil
-lim_inf = q1 - 1.5*iq #limite inferior
-lim_sup = q3 + 1.5*iq #limite superior
+#Excluindo outliers das colunas
+ 
+for (i in seq_along(listing_df$beds)){
+  if (listing_df$beds[i] > 3.5){
+    listing_df$beds[i] <- mean(listing_df$beds)
+  } 
+}
+  
+for (i in seq_along(listing_df$bedrooms)){
+  if (listing_df$bedrooms[i] > 1){
+    listing_df$bedrooms[i] <- 1
+  } 
+}
 
-beds_out > lim_sup #mostrará acima do limite superior
-beds_out < lim_inf #mostrará abaixo do limite inferior
+for (i in seq_along(listing_df$bathrooms_text)){
+  if (listing_df$bathrooms_text[i] > 2.25){
+    listing_df$bathrooms_text[i] <- mean(listing_df$bathrooms_text)
+  } 
+}
 
-#retirando outliers
-out = (beds_out > lim_sup) | (beds_out < lim_inf)
-beds_out[out] = NA #retirando outliers
-boxplot(beds_out)
-boxplot(listing_df$beds)
+for (i in seq_along(listing_df$price)){
+  if (listing_df$price[i] > 24068){
+    listing_df$price[i] <- mean(listing_df$price)
+  } 
+}
 
-#===================bedrooms========================================#
-ggplot(listing_df, aes(x=bedrooms)) + 
-  geom_boxplot()
-
-bedrooms_out = listing_df$bedrooms #criando variável cópia
-
-#calculando os quartis
-q1_br = quantile(listing_df$bedrooms, 0.25, na.rm = TRUE) #1º quartil
-q3_br = quantile(listing_df$bedrooms, 0.75, na.rm = TRUE) #3º quartil
-iq_br = q3 - q1 #interquartil
-lim_inf_br = q1 - 1.5*iq #limite inferior
-lim_sup_br = q3 + 1.5*iq #limite superior
-
-bedrooms_out > lim_sup #mostrará acima do limite superior
-bedrooms_out < lim_inf #mostrará abaixo do limite inferior
-
-#retirando outliers
-out_br = (bedrooms_out > lim_sup) | (bedrooms_out < lim_inf)
-bedrooms_out[out] = NA #retirando outliers
-boxplot(bedrooms_out)
 boxplot(listing_df$bedrooms)
-
+boxplot(listing_df$beds)
+boxplot(listing_df$bathrooms_text)
 boxplot(listing_df$price)
-              
-#==============================================================================#        
+boxplot(listing_df$host_acceptance_rate)
+
+#Handling NaNs
+listing_df$host_acceptance_rate[is.na(listing_df$host_acceptance_rate)] <- 77.077
+listing_df <- listing_df[!is.na(listing_df$host_verifications),]
+
+#Sevocê retornar na linha 69 e refazer a tabela com a média de valor de cada tipo de quarto, agora com outliers tratados, verá que faz muito mais sentido.
+
+
+#Dummizando variáveis
+listing_df_1_dummies <- dummy_columns(.data = listing_df,
+                                      select_columns = c("room_type", "host_response_time", "host_verifications",
+                                                         "neighbourhood_cleansed", "property_type"),
+                                      remove_selected_columns = T,
+                                      remove_most_frequent_dummy = T)
+
+summary(listing_df_1_dummies)
+
+
+#Modeling
         
 #Modelagem Regressão Múltipla
 
 #  1.  Rodar modelo dropando os NA 
 #  2.  Rodar modelo dropando apenas as colunas de score
 
+           
+listing_df_1_dummies <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
+                                                review_scores_cleanliness, review_scores_location,
+                                                review_scores_rating, review_scores_checkin))
+           
 
-#MODELO 1: Dropando NA das colunas de scores.
-           
-listing_df_1 <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
-                                                          review_scores_cleanliness, review_scores_location,
-                                                          review_scores_rating, review_scores_checkin))
+#ESTIMAÇÃO DA REGRESSÃO LINEAR MÚLTIPLA 
 
-           
-#Dropar NAS
-           
-listing_df_1 <- na.omit(listing_df_1)
-sapply(listing_df_1, function(x) sum(is.na(x)))
-           
-#Estatísticas univariadas
-summary(listing_df_1)
-           
-#Verificando correlações
 
-chart.Correlation((listing_df_1[,c(21,4,6,16,17,18,19)]), histogram = TRUE)
 
-#Dummizando variáveis
-listing_df_1_dummies <- dummy_columns(.data = listing_df_1,
-                                      select_columns = c("room_type", "host_response_time", "host_verifications",
-                                                                    "neighbourhood_cleansed", "property_type"),
-                                      remove_selected_columns = T,
-                                      remove_most_frequent_dummy = T)
+#modelagem com todas as variáveis
+modelo_listing_dummies <- lm(price ~ ., listing_df_1_dummies)
+summary(modelo_listing_dummies)
+
+
+#Procedimento Step-wise no modelo
+step_listing_df <- step(modelo_listing_dummies, k = 3.841459)
+summary(step_listing_df)
+
+#Kernel density estimation (KDE) 
+listing_df_1_dummies %>%
+  ggplot() +
+  geom_density(aes(x = step_listing_df$residuals), fill = "#55C667FF") +
+  labs(x = "Resíduos do Modelo Stepwise",
+       y = "Densidade") +
+  theme_bw()
+
+#Teste de aderência dos resíduos à normalidade
+
+sf_teste <- function (x) 
+{
+  DNAME <- deparse(substitute(x))
+  x <- sort(x[complete.cases(x)])
+  n <- length(x)
+  if ((n < 5 || n > 25000)) 
+    stop("sample size must be between 5 and 5000")
+  y <- qnorm(ppoints(n, a = 3/8))
+  W <- cor(x, y)^2
+  u <- log(n)
+  v <- log(u)
+  mu <- -1.2725 + 1.0521 * (v - u)
+  sig <- 1.0308 - 0.26758 * (v + 2/u)
+  z <- (log(1 - W) - mu)/sig
+  pval <- pnorm(z, lower.tail = FALSE)
+  RVAL <- list(statistic = c(W = W), p.value = pval, method = "Shapiro-Francia normality test", 
+               data.name = DNAME)
+  class(RVAL) <- "htest"
+  return(RVAL)
+}
+
+sf_teste(step_listing_df$residuals)
+
+#histograma
+listing_df %>%
+  mutate(residuos = step_listing_df$residuals) %>%
+  ggplot(aes(x = residuos)) +
+  geom_histogram(aes(y = ..density..), 
+                 color = "white", 
+                 fill = "#440154FF", 
+                 bins = 30,
+                 alpha = 0.6) +
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(step_listing_df$residuals),
+                            sd = sd(step_listing_df$residuals)),
+                size = 2, color = "grey30") +
+  scale_color_manual(values = "grey50") +
+  labs(x = "Resíduos",
+       y = "Frequência") +
+  theme_bw()
+
+#O teste de Shapiro-Francia comprovou a não derência à normalidade dos resíduos. 
+#Diante disso, vou fazer uma transformação Box-Cox na variável dependente e rodar novo modelo.
+#TRABSFORMAÇÃO BOX-COX
+lambda_BC <- powerTransform(listing_df$price)
+lambda_BC
+
+#Inserindo o lambda de Box-Cox na base de dados para a estimação de um novo modelo
+listing_df$bcprice <- (((listing_df$price ^ lambda_BC$lambda) - 1) / 
+                         lambda_BC$lambda)
+
+#Visualizando a nova variável na base de dados
+listing_df %>%
+  select(price, bcprice) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = F, 
+                font_size = 18)
+
+#Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox
+modelo_bc <- lm(formula = bcprice ~ ., 
+                data = lis)
+
+#Teste de heterocedasticidade
+ols_test_breusch_pagan(step_listing_df)
+listing_df_1_dummies$fitted_step <- step_listing_df$fitted.values
+listing_df_1_dummies$residuos_step <- step_listing_df$residuals
+listing_df_1_dummies %>%
+  ggplot() +
+  geom_point(aes(x = fitted_step, y = residuos_step),
+             color = "#55C667FF", size = 3) +
+  labs(x = "Fitted Values do Modelo Stepwise",
+       y = "Resíduos do Modelo Stepwise") +
+  theme_bw()
+
+
