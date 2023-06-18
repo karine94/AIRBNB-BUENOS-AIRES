@@ -302,8 +302,6 @@ listing_df_1_dummies <- subset(listing_df, select = -c(review_scores_accuracy, r
 
 #ESTIMAÇÃO DA REGRESSÃO LINEAR MÚLTIPLA 
 
-
-
 #modelagem com todas as variáveis
 modelo_listing_dummies <- lm(price ~ ., listing_df_1_dummies)
 summary(modelo_listing_dummies)
@@ -322,6 +320,7 @@ listing_df_1_dummies %>%
   theme_bw()
 
 #Teste de aderência dos resíduos à normalidade
+
 
 sf_teste <- function (x) 
 {
@@ -371,31 +370,84 @@ lambda_BC <- powerTransform(listing_df$price)
 lambda_BC
 
 #Inserindo o lambda de Box-Cox na base de dados para a estimação de um novo modelo
-listing_df$bcprice <- (((listing_df$price ^ lambda_BC$lambda) - 1) / 
+listing_df_1_dummies$bcprice <- (((listing_df$price ^ lambda_BC$lambda) - 1) / 
                          lambda_BC$lambda)
 
-#Visualizando a nova variável na base de dados
+#Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox
+modelo_bc <- lm(formula = bcprice ~ ., na.rm = T,
+                data = listing_df_1_dummies)
+
+summary(modelo_bc)
+#Step-wise no modelo com box-cox
+step_modelo_bc <- step(modelo_bc, k=3.841459)
+summary(step_modelo_bc)
+
+#Teste de shapiro francia
+sf_teste(step_modelo_bc$residuals)
+
+#Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
+listing_df_1_dummies %>%
+  mutate(residuos = step_modelo_bc$residuals) %>%
+  ggplot(aes(x = residuos)) +
+  geom_histogram(aes(y = ..density..), 
+                 color = "white", 
+                 fill = "#440154FF", 
+                 bins = 15,
+                 alpha = 0.6) +
+  stat_function(fun = dnorm, 
+                args = list(mean = mean(step_modelo_bc$residuals),
+                            sd = sd(step_modelo_bc$residuals)),
+                size = 2, color = "grey30") +
+  scale_color_manual(values = "grey50") +
+  labs(x = "Resíduos",
+       y = "Frequência") +
+  theme_bw()
+
+#Fazendo predições
+predict(object = step_modelo_bc, 
+        data.frame(disclosure = 50, 
+                   liquidez = 14, 
+                   ativos = 4000),
+        interval = "confidence", level = 0.95)
+
+#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
+ols_test_breusch_pagan(step_modelo_bc)
+
+
+#Adicionando ao dataset valores de Yhat com stepwise e stepwise + Box-Cox
+listing_df$yhat_step_listing <- step_listing_df$fitted.values
+listing_df$yhat_step_modelo_bc <- (((step_modelo_bc$fitted.values*(lambda_BC$lambda))+
+                                    1))^(1/(lambda_BC$lambda))
+
+
+#Visualizando os dois fitted values no dataset
+#modelos step_empresas e step_modelo_bc
 listing_df %>%
-  select(price, bcprice) %>%
+  select(price, yhat_step_listing, yhat_step_modelo_bc) %>%
   kable() %>%
   kable_styling(bootstrap_options = "striped", 
                 full_width = F, 
-                font_size = 18)
+                font_size = 22)
 
-#Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox
-modelo_bc <- lm(formula = bcprice ~ ., 
-                data = lis)
 
-#Teste de heterocedasticidade
-ols_test_breusch_pagan(step_listing_df)
-listing_df_1_dummies$fitted_step <- step_listing_df$fitted.values
-listing_df_1_dummies$residuos_step <- step_listing_df$residuals
-listing_df_1_dummies %>%
+#Ajustes dos modelos: valores previstos (fitted values) X valores reais
+listing_df %>%
   ggplot() +
-  geom_point(aes(x = fitted_step, y = residuos_step),
-             color = "#55C667FF", size = 3) +
-  labs(x = "Fitted Values do Modelo Stepwise",
-       y = "Resíduos do Modelo Stepwise") +
-  theme_bw()
-
-
+  geom_smooth(aes(x = price, y = yhat_step_listing , color = "Stepwise"),
+              method = "lm", se = F, formula = y ~ splines::bs(x, df = 5), size = 1.5) +
+  geom_point(aes(x = price, y = yhat_step_listing),
+             color = "#440154FF", alpha = 0.6, size = 2) +
+  geom_smooth(aes(x = price, y = yhat_step_modelo_bc, color = "Stepwise Box-Cox"),
+              method = "lm", se = F, formula = y ~ splines::bs(x, df = 5), size = 1.5) +
+  geom_point(aes(x = price, y = yhat_step_modelo_bc),
+             color = "#287D8EFF", alpha = 0.6, size = 2) +
+  geom_smooth(aes(x = price, y = price), method = "lm", formula = y ~ x,
+              color = "grey30", size = 1.05,
+              linetype = "longdash") +
+  scale_color_manual("Modelos:", 
+                     values = c("#287D8EFF", "#440154FF")) +
+  labs(x = "price", y = "Fitted Values") +
+  theme(panel.background = element_rect("white"),
+        panel.grid = element_line("grey95"),
+        panel.border = element_rect(NA),
+        legend.position = "bottom")
