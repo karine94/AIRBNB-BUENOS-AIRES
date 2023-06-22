@@ -360,6 +360,7 @@ listing_df %>%
 
 #O teste de Shapiro-Francia comprovou a não derência à normalidade dos resíduos. 
 #Diante disso, vou fazer uma transformação Box-Cox na variável dependente e rodar novo modelo.
+
 #TRABSFORMAÇÃO BOX-COX
 lambda_BC <- powerTransform(listing_df$price)
 lambda_BC
@@ -373,21 +374,13 @@ modelo_bc <- lm(formula = bcprice ~ ., na.rm = T,
                 data = listing_df_1_dummies)
 
 summary(modelo_bc)
+
 #Step-wise no modelo com box-cox
 step_modelo_bc <- step(modelo_bc, k=3.841459)
 summary(step_modelo_bc)
 
-#Teste de shapiro francia
-sf_teste(step_modelo_bc$residuals)
 
-#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
-ols_test_breusch_pagan(step_modelo_bc)
-
-#obs: Além dos resíduos não serem aderentes à normalidade, também observamos
-#que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
-#relevantes para explicar Y.
-
-#Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
+#Plotando os novos resíduos do modelo step_modelo_bc com curva normal teórica
 listing_df_1_dummies %>%
   mutate(residuos = step_modelo_bc$residuals) %>%
   ggplot(aes(x = residuos)) +
@@ -405,22 +398,25 @@ listing_df_1_dummies %>%
        y = "Frequência") +
   theme_bw()
 
-#Fazendo predições
-predict(object = step_modelo_bc, 
-        data.frame(disclosure = 50, 
-                   liquidez = 14, 
-                   ativos = 4000),
-        interval = "confidence", level = 0.95)
+#Teste de shapiro francia
+sf_teste(step_modelo_bc$residuals)
 
-  
-#Adicionando ao dataset valores de Yhat com stepwise e stepwise + Box-Cox
+#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
+ols_test_breusch_pagan(step_modelo_bc)
+
+#obs: Além dos resíduos não serem aderentes à normalidade, também observamos
+#que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
+#relevantes para explicar Y.
+
+#Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
+#comparação
 listing_df$yhat_step_listing <- step_listing_df$fitted.values
 listing_df$yhat_step_modelo_bc <- (((step_modelo_bc$fitted.values*(lambda_BC$lambda))+
                                     1))^(1/(lambda_BC$lambda))
 
 
 #Visualizando os dois fitted values no dataset
-#modelos step_empresas e step_modelo_bc
+#modelos step_listing_df e step_modelo_bc
 listing_df %>%
   select(price, yhat_step_listing, yhat_step_modelo_bc) %>%
   kable() %>%
@@ -450,3 +446,11 @@ listing_df %>%
         panel.grid = element_line("grey95"),
         panel.border = element_rect(NA),
         legend.position = "bottom")
+
+
+#Fazendo predições
+predict(object = step_modelo_bc, 
+        data.frame(disclosure = 50, 
+                   liquidez = 14, 
+                   ativos = 4000),
+        interval = "confidence", level = 0.95)
