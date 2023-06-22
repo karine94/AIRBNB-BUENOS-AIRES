@@ -12,6 +12,7 @@
 renv::init()
 
 #instalando pacotes necessários
+
 pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "splines","reshape2","PerformanceAnalytics","correlation","see",
              "ggraph","psych","nortest","rgl","car","ggside","tidyquant","olsrr",
@@ -54,10 +55,9 @@ listing_df %>%
   theme(axis.text.x = element_text(angle = 90))+
   geom_col()
   
-  #-------------------------------------------------------------#
-    #Caso você vá até Buenos Aires, estes são os bairros em que 
-   #você tem maiores chances de encontrar uma acomodação.
-  #-------------------------------------------------------------#
+#-------------------------------------------------------------#
+#Caso você vá até Buenos Aires, estes são os bairros em que você tem maiores chances de encontrar uma acomodação.
+#-------------------------------------------------------------#
 
 
 #Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
@@ -75,11 +75,10 @@ listing_df %>%
                 full_width = F,
                 font_size = 22)
 
-    #-------------------------------------------------------------#
-      #Quando se vai a Buenos Aires é mais caro ficar em hotel. 
-      #Entretando é um pouco estranho que um Private room seja mais
-      #barato que um Shared room, você não acha? Vamos investigar isso? 
-    #-------------------------------------------------------------#
+#-------------------------------------------------------------#
+#Quando se vai a Buenos Aires é mais caro ficar em hotel.Entretando é um pouco estranho que um Private room seja mais
+#barato que um Shared room, você não acha? Vamos investigar isso? 
+#-------------------------------------------------------------#
 
 
 #Vamos ver como os preços se distribuem em função de cada tipo de quarto, quem sabe alguns outliers estejam alterando
@@ -273,6 +272,13 @@ boxplot(listing_df$host_acceptance_rate)
 #Handling NaNs
 listing_df$host_acceptance_rate[is.na(listing_df$host_acceptance_rate)] <- 77.077
 listing_df <- listing_df[!is.na(listing_df$host_verifications),]
+sapply(listing_df, function(x) sum(is.na(x)))
+
+#todas as variaveis com score possuem nuitos NAns então vou dropaar 
+
+listing_df <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
+                                                       review_scores_cleanliness, review_scores_location,
+                                                       review_scores_rating, review_scores_checkin))
 
 #Sevocê retornar na linha 69 e refazer a tabela com a média de valor de cada tipo de quarto, agora com outliers tratados, verá que faz muito mais sentido.
 
@@ -288,27 +294,16 @@ summary(listing_df_1_dummies)
 
 
 #Modeling
-        
-#Modelagem Regressão Múltipla
-
-#  1.  Rodar modelo dropando os NA 
-#  2.  Rodar modelo dropando apenas as colunas de score
-
-           
-listing_df_1_dummies <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
-                                                review_scores_cleanliness, review_scores_location,
-                                                review_scores_rating, review_scores_checkin))
-           
 
 #ESTIMAÇÃO DA REGRESSÃO LINEAR MÚLTIPLA 
 
 #modelagem com todas as variáveis
-modelo_listing_dummies <- lm(price ~ ., listing_df_1_dummies)
+modelo_listing <- lm(price ~ ., listing_df_1_dummies)
 summary(modelo_listing_dummies)
 
 
 #Procedimento Step-wise no modelo
-step_listing_df <- step(modelo_listing_dummies, k = 3.841459)
+step_listing_df <- step(modelo_listing, k = 3.841459)
 summary(step_listing_df)
 
 #Kernel density estimation (KDE) 
@@ -385,6 +380,13 @@ summary(step_modelo_bc)
 #Teste de shapiro francia
 sf_teste(step_modelo_bc$residuals)
 
+#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
+ols_test_breusch_pagan(step_modelo_bc)
+
+#obs: Além dos resíduos não serem aderentes à normalidade, também observamos
+#que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
+#relevantes para explicar Y.
+
 #Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
 listing_df_1_dummies %>%
   mutate(residuos = step_modelo_bc$residuals) %>%
@@ -410,10 +412,7 @@ predict(object = step_modelo_bc,
                    ativos = 4000),
         interval = "confidence", level = 0.95)
 
-#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
-ols_test_breusch_pagan(step_modelo_bc)
-
-
+  
 #Adicionando ao dataset valores de Yhat com stepwise e stepwise + Box-Cox
 listing_df$yhat_step_listing <- step_listing_df$fitted.values
 listing_df$yhat_step_modelo_bc <- (((step_modelo_bc$fitted.values*(lambda_BC$lambda))+
