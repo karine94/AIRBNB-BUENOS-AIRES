@@ -380,7 +380,18 @@ step_modelo_bc <- step(modelo_bc, k=3.841459)
 summary(step_modelo_bc)
 
 
+<<<<<<< HEAD
 #Plotando os novos resíduos do modelo step_modelo_bc com curva normal teórica
+=======
+#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
+ols_test_breusch_pagan(step_modelo_bc)
+
+#obs: Além dos resíduos não serem aderentes à normalidade, também observamos
+#que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
+#relevantes para explicar Y.
+
+#Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
+>>>>>>> 333f01b3545c5dba8fbaba503908c72f26210887
 listing_df_1_dummies %>%
   mutate(residuos = step_modelo_bc$residuals) %>%
   ggplot(aes(x = residuos)) +
@@ -401,6 +412,7 @@ listing_df_1_dummies %>%
 #Teste de shapiro francia
 sf_teste(step_modelo_bc$residuals)
 
+<<<<<<< HEAD
 #Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
 ols_test_breusch_pagan(step_modelo_bc)
 
@@ -410,6 +422,10 @@ ols_test_breusch_pagan(step_modelo_bc)
 
 #Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
 #comparação
+=======
+  
+#Adicionando ao dataset valores de Yhat com stepwise e stepwise + Box-Cox
+>>>>>>> 333f01b3545c5dba8fbaba503908c72f26210887
 listing_df$yhat_step_listing <- step_listing_df$fitted.values
 listing_df$yhat_step_modelo_bc <- (((step_modelo_bc$fitted.values*(lambda_BC$lambda))+
                                     1))^(1/(lambda_BC$lambda))
