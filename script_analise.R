@@ -6,10 +6,9 @@
 
 #Neste projeto busco responder as seguintes questões: 
 
-  #Qual o melhor período para alugar um AirBnb nem Buenos Aires?
-  #Quais recursos são mais importantes para listar preços?
+  #Qual o melhor período para alugar um AirBnb em Buenos Aires?
+  #Quais variáveis tem maior influência no preço das listagens?
 
-renv::init()
 
 #instalando pacotes necessários
 
@@ -46,6 +45,7 @@ head(listing_df)
 print(paste("o dataset tem",nrow(listing_df), "linhas e", ncol(listing_df), "colunas."))
 
 #Pra começar vamos observar os 15 bairros mais listados através da coluna neighbourhood_cleansed.
+#Como parâmetro de localização, usarei neighbourhood_cleansed, que tem o bairro baseado na latitude e longitude do imóvel.
 listing_df %>% 
   group_by(neighbourhood_cleansed) %>% 
   summarise(qtd_bairros = n()) %>% 
@@ -55,9 +55,8 @@ listing_df %>%
   theme(axis.text.x = element_text(angle = 90))+
   geom_col()
   
-#-------------------------------------------------------------#
 #Caso você vá até Buenos Aires, estes são os bairros em que você tem maiores chances de encontrar uma acomodação.
-#-------------------------------------------------------------#
+
 
 
 #Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
@@ -75,14 +74,11 @@ listing_df %>%
                 full_width = F,
                 font_size = 22)
 
-#-------------------------------------------------------------#
-#Quando se vai a Buenos Aires é mais caro ficar em hotel.Entretando é um pouco estranho que um Private room seja mais
-#barato que um Shared room, você não acha? Vamos investigar isso? 
-#-------------------------------------------------------------#
-
-
-#Vamos ver como os preços se distribuem em função de cada tipo de quarto, quem sabe alguns outliers estejam alterando
-#o valor médio dos tipos de quarto. 
+#Quando se vai a Buenos Aires é mais caro ficar em hotel.
+#Entretando é um pouco estranho que um quarto privado seja mais
+#barato que um quarto compartilhado, você não acha? Vamos investigar isso? 
+#Vamos ver como os preços se distribuem em função de cada tipo de quarto, 
+#quem sabe alguns outliers estejam alterando o valor médio dos tipos de quarto. 
 
 ggplotly(
   ggplot(listing_df, aes(x = room_type, y = price)) +
@@ -91,8 +87,9 @@ ggplotly(
     theme_classic()
 )
 
-#BINGO! Como a média esta sendo manipulada pelos outliers, vou analisar a mediana, que por ser menos sensível a outliers,
-#pode me dar um valor mais adequado a cerca dos tipos de quartos. Outilers serão tratados posteriormente. 
+#BINGO! Como a média esta sendo manipulada pelos outliers, vou analisar a mediana, 
+#que sofre menor influência dos outliers e pode dar um valor mais adequado 
+#a cerca dos tipos de quartos.
 
 listing_df %>%
   group_by(room_type) %>%
@@ -102,10 +99,13 @@ listing_df %>%
                 full_width = F,
                 font_size = 22)
 
-#Agora podemos concluir que os quartos compartilhados são os mais baratos. Tudo faz mais sentido agora, não acha? :)
+#Agora podemos concluir que os quartos compartilhados são os mais baratos. 
+#Tudo faz mais sentido agora, não acha? :)
 
-
+#Outra pergunta interessante é:
 #O preço dos imóveis mudam significativamente ao longo do ano? 
+#Para responder essa questão vamos usar o dataset calendar_df
+
 calendar_df$date <- as.Date(calendar_df$date)
 calendar_df['month'] <- (format(calendar_df$date, '%Y-%m'))
 calendar_df$month <- as.factor(calendar_df$month)
@@ -113,7 +113,7 @@ calendar_df$price <- str_replace_all(calendar_df$price,'[$]','')
 calendar_df$price <- str_replace_all(calendar_df$price,',','')
 calendar_df$price <- as.numeric(calendar_df$price)
 
-#preço em função da mediana de preço 
+#Mês x mediana preço 
 price_month <- calendar_df %>%
   group_by(month) %>%
   summarise(median_price = median(price)) %>%
@@ -130,10 +130,10 @@ price_month
 #Verificando correlações
 
 names(listing_df)
-chart.Correlation((listing_df_1[,c(22,18,19,20)]), histogram = TRUE)
+chart.Correlation((listing_df[,c(22,18,19,20)]), histogram = TRUE)
 
-#Pelo visto o preço não é tão influenciado assim pela quantidade de banheiros, quartos e camas, já que a correção entre o preço
-#e essas variáveis não é tão elevada. 
+#Pelo visto o preço não é tão influenciado assim pela quantidade de banheiros, quartos e camas, 
+#já que a correção entre o preço e essas variáveis não é tão significativa.
 
 
 #Data Preparation
@@ -152,14 +152,9 @@ listing_df <- subset(listing_df, select = -c(id, listing_url, scrape_id, picture
                                              host_about,description, name, host_name, first_review, last_review))
 
 
-#Como parâmetro de localização, usarei neighbourhood_cleansed, que tem o bairro baseado na latitude e longitude do imóvel.
-
-unique(listing_df$neighbourhood_cleansed)
-table(listing_df$neighbourhood_cleansed)
 
 #Preparando colunas 
-#A coluna bathrooms está vazia e foi excluída, pois na verdade, a quantidade de bathrooms está
-#em bathrooms_text, que precisa de alguns ajustes. Vamos fazer isso agora.
+#A coluna bathrooms_text precisa de alguns ajustes. Vamos fazer isso agora.
 
 unique(listing_df$bathrooms_text)
 listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'bath','')
@@ -172,8 +167,8 @@ listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'half-','
 listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'Half-','')
 listing_df$bathrooms_text <- as.numeric(listing_df$bathrooms_text)
 
-#Bedrooms tem 3058 valores NA. Talvez esse imóvel seja um studio, quarta-sala ou algo to tipo. Vou inserir
-#o valor 1 no lugar, assim como beds, pois pode ser sofá-cama. 
+#Bedrooms tem 3058 valores NA. Talvez esse imóvel seja um studio, quarta-sala ou algo do tipo. 
+#Vou inserir o valor 1 no lugar, assim como beds, pois pode ser sofá-cama. 
 
 listing_df$beds[is.na(listing_df$beds)] <- 1
 listing_df$bedrooms[is.na(listing_df$bedrooms)] <- 1
@@ -269,18 +264,19 @@ boxplot(listing_df$bathrooms_text)
 boxplot(listing_df$price)
 boxplot(listing_df$host_acceptance_rate)
 
+#Sevocê retornar na linha 69 e refazer a tabela com a média de valor de cada tipo de quarto, agora com outliers tratados, verá que faz muito mais sentido.
+
+
 #Handling NaNs
 listing_df$host_acceptance_rate[is.na(listing_df$host_acceptance_rate)] <- 77.077
 listing_df <- listing_df[!is.na(listing_df$host_verifications),]
 sapply(listing_df, function(x) sum(is.na(x)))
 
-#todas as variaveis com score possuem nuitos NAns então vou dropaar 
+#todas as variaveis com score possuem nuitos NAs então vou dropar 
 
 listing_df <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
                                                        review_scores_cleanliness, review_scores_location,
                                                        review_scores_rating, review_scores_checkin))
-
-#Sevocê retornar na linha 69 e refazer a tabela com a média de valor de cada tipo de quarto, agora com outliers tratados, verá que faz muito mais sentido.
 
 
 #Dummizando variáveis
@@ -315,7 +311,6 @@ listing_df_1_dummies %>%
   theme_bw()
 
 #Teste de aderência dos resíduos à normalidade
-
 
 sf_teste <- function (x) 
 {
@@ -361,7 +356,7 @@ listing_df %>%
 #O teste de Shapiro-Francia comprovou a não derência à normalidade dos resíduos. 
 #Diante disso, vou fazer uma transformação Box-Cox na variável dependente e rodar novo modelo.
 
-#TRABSFORMAÇÃO BOX-COX
+#TRANSFORMAÇÃO BOX-COX
 lambda_BC <- powerTransform(listing_df$price)
 lambda_BC
 
@@ -372,16 +367,14 @@ listing_df_1_dummies$bcprice <- (((listing_df$price ^ lambda_BC$lambda) - 1) /
 #Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox
 modelo_bc <- lm(formula = bcprice ~ ., na.rm = T,
                 data = listing_df_1_dummies)
-
 summary(modelo_bc)
 
 #Step-wise no modelo com box-cox
 step_modelo_bc <- step(modelo_bc, k=3.841459)
 summary(step_modelo_bc)
 
-
-
-#Plotando os novos resíduos do modelo step_modelo_bc com curva normal teórica
+#Teste de shapiro francia
+sf_teste(step_modelo_bc$residuals)
 
 #Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
 ols_test_breusch_pagan(step_modelo_bc)
@@ -389,6 +382,7 @@ ols_test_breusch_pagan(step_modelo_bc)
 #obs: Além dos resíduos não serem aderentes à normalidade, também observamos
 #que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
 #relevantes para explicar Y.
+
 
 #Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
 
@@ -409,15 +403,6 @@ listing_df_1_dummies %>%
        y = "Frequência") +
   theme_bw()
 
-#Teste de shapiro francia
-sf_teste(step_modelo_bc$residuals)
-
-#Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
-ols_test_breusch_pagan(step_modelo_bc)
-
-#obs: Além dos resíduos não serem aderentes à normalidade, também observamos
-#que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
-#relevantes para explicar Y.
 
 #Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
 #comparação
