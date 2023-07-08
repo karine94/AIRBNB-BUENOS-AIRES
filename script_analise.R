@@ -1,6 +1,6 @@
-################################################################################
-# PROJETO AIRBNB BUENOS AIRES               
-################################################################################
+
+#################### PROJETO AIRBNB BUENOS AIRES ####################             
+
 
 #Business Understanding
 
@@ -10,18 +10,13 @@
   #Quais variáveis tem maior influência no preço das listagens?
 
 
+#Data Understanding
+
 #instalando pacotes necessários
 
 pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "splines","reshape2","PerformanceAnalytics","correlation","see",
-             "ggraph","psych","nortest","rgl","car","ggside","tidyquant","olsrr",
-             "jtools","ggstance","magick","cowplot","emojifont","beepr","Rcpp",
-             "equatiomatic", "lpyr","sparklyr","arrow","nlme","reticulate",
-             "mlflow", "stats","glue", "renv", "gridExtra","forecast","TTR",
-             "smooth", "tsibble", "fable","tsibbledata", "fpp3","lubridate",
-             "urca", "dygraphs", "quantmod","BETS","tseries","FinTS","feasts",
-             "gridExtra", "scales", "caret","xtable", "tsutils","GetBCBData", 
-             "quantmod","dgof","seasonal","devtools","transformr","gganimate")
+             "ggraph", "car", "olsrr", "jtools")
 
 
 options(rgl.debug = TRUE)
@@ -36,11 +31,11 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
   sapply(pacotes, require, character = T) 
 }
 
+
 #loading data
 listing_df <- read_csv('data/listings.csv') #contém conjunto de dados airbnb completo de Buenos Aires
-calendar_df <- read.csv("calendar.csv") #contém o preço de cada listagem durante o período de um ano
+calendar_df <- read.csv("data/calendar.csv") #contém o preço de cada listagem durante o período de um ano
 
-#Data Understanding
 head(listing_df)
 print(paste("o dataset tem",nrow(listing_df), "linhas e", ncol(listing_df), "colunas."))
 
@@ -56,8 +51,6 @@ listing_df %>%
   geom_col()
   
 #Caso você vá até Buenos Aires, estes são os bairros em que você tem maiores chances de encontrar uma acomodação.
-
-
 
 #Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
 #Para calcular a média, precisamos fazer uns ajustes na coluna "price", removendo $ e a vírgula.
@@ -126,7 +119,6 @@ price_month <- calendar_df %>%
   theme_classic()
 price_month
 
-
 #Verificando correlações
 
 names(listing_df)
@@ -185,10 +177,26 @@ listing_df$reviews_per_month[is.na(listing_df$reviews_per_month)] <- 0
 #Transformando variáveis em factor 
 listing_df$source <- as.factor(listing_df$source)
 listing_df$property_type <- as.factor(listing_df$property_type)
-listing_df$host_response_time[is.na(listing_df$host_response_time)] <- "did not inform"
+listing_df$host_response_time[listing_df$host_response_time == 'N/A'] <- "did not inform"
 listing_df$host_response_time <- as.factor(listing_df$host_response_time)
 listing_df$neighbourhood_cleansed <- as.factor(listing_df$neighbourhood_cleansed)
 listing_df$room_type <- as.factor(listing_df$room_type)
+
+#Transformando variáveis logicas em binárias
+
+#verificando quais são as variáveis logicas presentes no dataset
+(to.replace <- names(which(sapply(listing_df, is.logical))))
+
+library(data.table)
+Cols <-  which(sapply(listing_df, is.logical))
+setDT(listing_df)
+
+for(j in Cols){
+  set(listing_df, i=NULL, j=j, value= as.numeric(listing_df[[j]]))
+}
+
+#confirmar procedimento de transformação
+glimpse(listing_df)
 
 #host_verification
 listing_df$host_verifications[listing_df$host_verifications == '[]'] <- 1
@@ -206,7 +214,6 @@ listing_df$host_acceptance_rate <- as.numeric(listing_df$host_acceptance_rate)
 listing_df$host_since <- as.Date(listing_df$host_since)
 listing_df$host_since <- (format(listing_df$host_since, '%Y-%m'))
 listing_df$host_since <- as.factor(listing_df$host_since)
-
 
 #Depois de uma breve análise, observei que as variáveis abaixo não são relevantes,portanto, vamos excluí-las.
 listing_df <- subset(listing_df, select = -c(last_scraped, calendar_last_scraped))
@@ -264,9 +271,6 @@ boxplot(listing_df$bathrooms_text)
 boxplot(listing_df$price)
 boxplot(listing_df$host_acceptance_rate)
 
-#Sevocê retornar na linha 69 e refazer a tabela com a média de valor de cada tipo de quarto, agora com outliers tratados, verá que faz muito mais sentido.
-
-
 #Handling NaNs
 listing_df$host_acceptance_rate[is.na(listing_df$host_acceptance_rate)] <- 77.077
 listing_df <- listing_df[!is.na(listing_df$host_verifications),]
@@ -277,15 +281,26 @@ sapply(listing_df, function(x) sum(is.na(x)))
 listing_df <- subset(listing_df, select = -c(review_scores_accuracy, review_scores_communication, 
                                                        review_scores_cleanliness, review_scores_location,
                                                        review_scores_rating, review_scores_checkin))
+glimpse(listing_df)
 
+#Tratando variáveis qualitativas
+#neste dataset, temos uma quantidade significativa de preditoras qualitativas, com variavéis que contém até mais de 50 categorias cada. 
+#Diante disso, devem passar por um tratamento específico, afim de reduzir sua dimensionalidade e depois disso serem introduzidas no modelo novamente
+#Por isso, nesta análise vou dropar essas variáveis e manter apenas a variavel room_type na forma dummizada
+#isso torna viável rodar nosso modelo. Estou trabalhando para no futuro trazer outra abordagem, já com essas preditoras qualitativas inclusas no modelo,
+#e assim comparar e analisar qual modelo tem capacidade preditiva melhor, para este estudo. 
+#Agora vou dummizar a room_type para inserir no modelo e também dropar as outras variáveis que não são do tipo qualitativas.
 
-#Dummizando variáveis
+listing_df <- subset(listing_df, select = -c(source, host_since, host_response_time, host_verifications, neighbourhood_cleansed,
+                                             property_type))
+
 listing_df_1_dummies <- dummy_columns(.data = listing_df,
-                                      select_columns = c("room_type", "host_response_time", "host_verifications",
-                                                         "neighbourhood_cleansed", "property_type"),
+                                      select_columns = c("room_type"),
                                       remove_selected_columns = T,
                                       remove_most_frequent_dummy = T)
 
+
+glimpse(listing_df)
 summary(listing_df_1_dummies)
 
 
@@ -295,17 +310,17 @@ summary(listing_df_1_dummies)
 
 #modelagem com todas as variáveis
 modelo_listing <- lm(price ~ ., listing_df_1_dummies)
-summary(modelo_listing_dummies)
+summary(modelo_listing)
 
 
 #Procedimento Step-wise no modelo
-step_listing_df <- step(modelo_listing, k = 3.841459)
-summary(step_listing_df)
+step_modelo_listing <- step(modelo_listing, k = 3.841459)
+summary(step_modelo_listing)
 
 #Kernel density estimation (KDE) 
 listing_df_1_dummies %>%
   ggplot() +
-  geom_density(aes(x = step_listing_df$residuals), fill = "#55C667FF") +
+  geom_density(aes(x = step_modelo_listing$residuals), fill = "#55C667FF") +
   labs(x = "Resíduos do Modelo Stepwise",
        y = "Densidade") +
   theme_bw()
@@ -333,11 +348,11 @@ sf_teste <- function (x)
   return(RVAL)
 }
 
-sf_teste(step_listing_df$residuals)
+sf_teste(step_modelo_listing$residuals)
 
 #histograma
-listing_df %>%
-  mutate(residuos = step_listing_df$residuals) %>%
+listing_df_1_dummies %>%
+  mutate(residuos = step_modelo_listing$residuals) %>%
   ggplot(aes(x = residuos)) +
   geom_histogram(aes(y = ..density..), 
                  color = "white", 
@@ -345,8 +360,8 @@ listing_df %>%
                  bins = 30,
                  alpha = 0.6) +
   stat_function(fun = dnorm, 
-                args = list(mean = mean(step_listing_df$residuals),
-                            sd = sd(step_listing_df$residuals)),
+                args = list(mean = mean(step_modelo_listing$residuals),
+                            sd = sd(step_modelo_listing$residuals)),
                 size = 2, color = "grey30") +
   scale_color_manual(values = "grey50") +
   labs(x = "Resíduos",
@@ -357,37 +372,49 @@ listing_df %>%
 #Diante disso, vou fazer uma transformação Box-Cox na variável dependente e rodar novo modelo.
 
 #TRANSFORMAÇÃO BOX-COX
-lambda_BC <- powerTransform(listing_df$price)
+lambda_BC <- powerTransform(listing_df_1_dummies$price)
 lambda_BC
 
 #Inserindo o lambda de Box-Cox na base de dados para a estimação de um novo modelo
-listing_df_1_dummies$bcprice <- (((listing_df$price ^ lambda_BC$lambda) - 1) / 
+listing_df_1_dummies$bcprice <- (((listing_df_1_dummies$price ^ lambda_BC$lambda) - 1) / 
                          lambda_BC$lambda)
 
 #Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox
-modelo_bc <- lm(formula = bcprice ~ ., na.rm = T,
+modelo_listing_bc <- lm(formula = bcprice ~ . -price, na.rm = T,
                 data = listing_df_1_dummies)
-summary(modelo_bc)
+summary(modelo_listing_bc)
 
 #Step-wise no modelo com box-cox
-step_modelo_bc <- step(modelo_bc, k=3.841459)
-summary(step_modelo_bc)
+step_modelo_listing_bc <- step(modelo_listing_bc, k=3.841459)
+summary(step_modelo_listing_bc)
 
 #Teste de shapiro francia
-sf_teste(step_modelo_bc$residuals)
+sf_teste(step_modelo_listing_bc$residuals)
 
 #Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox
-ols_test_breusch_pagan(step_modelo_bc)
+ols_test_breusch_pagan(step_modelo_listing_bc)
 
 #obs: Além dos resíduos não serem aderentes à normalidade, também observamos
 #que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
 #relevantes para explicar Y.
 
+#Resumo dos dois modelos obtidos pelo procedimento Stepwise (linear e com Box-Cox)
+#Função 'export_summs' do pacote 'jtools'
+export_summs(step_modelo_listing, step_modelo_listing_bc,
+             model.names = c("Modelo Linear","Modelo Box-Cox"),
+             scale = F, digits = 6)
 
-#Plotando os novos resíduos do modelo step_bc_planosaude com curva normal teórica
 
+#Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
+#comparação
+listing_df$yhat_step_listing <- step_modelo_listing$fitted.values
+listing_df$yhat_step_modelo_bc <- (((step_modelo_listing_bc$fitted.values*(lambda_BC$lambda))+
+                                      1))^(1/(lambda_BC$lambda))
+
+
+#Plotando os novos resíduos do modelo step_modelo_listing_bc com curva normal teórica
 listing_df_1_dummies %>%
-  mutate(residuos = step_modelo_bc$residuals) %>%
+  mutate(residuos = step_modelo_listing_bc$residuals) %>%
   ggplot(aes(x = residuos)) +
   geom_histogram(aes(y = ..density..), 
                  color = "white", 
@@ -395,23 +422,15 @@ listing_df_1_dummies %>%
                  bins = 15,
                  alpha = 0.6) +
   stat_function(fun = dnorm, 
-                args = list(mean = mean(step_modelo_bc$residuals),
-                            sd = sd(step_modelo_bc$residuals)),
+                args = list(mean = mean(step_modelo_listing_bc$residuals),
+                            sd = sd(step_modelo_listing_bc$residuals)),
                 size = 2, color = "grey30") +
   scale_color_manual(values = "grey50") +
   labs(x = "Resíduos",
        y = "Frequência") +
   theme_bw()
 
-
-#Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
-#comparação
-listing_df$yhat_step_listing <- step_listing_df$fitted.values
-listing_df$yhat_step_modelo_bc <- (((step_modelo_bc$fitted.values*(lambda_BC$lambda))+
-                                    1))^(1/(lambda_BC$lambda))
-
 #Visualizando os dois fitted values no dataset
-#modelos step_listing_df e step_modelo_bc
 listing_df %>%
   select(price, yhat_step_listing, yhat_step_modelo_bc) %>%
   kable() %>%
@@ -443,9 +462,4 @@ listing_df %>%
         legend.position = "bottom")
 
 
-#Fazendo predições
-predict(object = step_modelo_bc, 
-        data.frame(disclosure = 50, 
-                   liquidez = 14, 
-                   ativos = 4000),
-        interval = "confidence", level = 0.95)
+
