@@ -1,17 +1,19 @@
 ---
-title: "Relatório"
+title: "Projeto AirBnb Buenos Aires"
 author: "Karine Almeida"
 date: "2023-07-07"
-output: html_document
+output: 
+    html_document:
+      highlight: textmate
+      theme: flatly
+      number_sections: yes
+      toc: yes
+      toc_float:
+        collapsed: yes
+        smooth_scroll: no
 ---
-# Projeto AirBnb Buenos Aires
-
-1.  Business Understanding
-2.  Data Understanding
-3.  Data Preparation
-4.  Modeling
-
-### 1 Business Understanding  
+  
+# Business Understanding  
   
 Para este projeto usei a base de dados do [Inside](http://insideairbnb.com/get-the-data/).  
 Você também pode encontrar a base de dados [aqui](https://drive.google.com/drive/folders/1CFnP_08eqz-eX_1go3VWBw-2FxF-zU8R?usp=drive_link).    
@@ -20,9 +22,9 @@ Neste projeto busco entender as seguintes questões:
 - Qual o melhor período para alugar um AirBnb em Buenos Aires?  
 - Além de outros insights que são disponibilizados ao longo do entendimento do nosso dataset.   
   
-### 2 Data Understanding 
+# Data Understanding 
   
-Instalando pacotes necessários  
+##Instalando pacotes necessários  
 ```{r echo=TRUE, message=FALSE}
 pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "splines","reshape2","PerformanceAnalytics","correlation","see",
@@ -41,7 +43,7 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
   sapply(pacotes, require, character = T) 
 }
 ```
-Loading data
+##Loading data
 ```{r}
 listing_df <- read_csv('data/listings.csv') #contém conjunto de dados airbnb completo de Buenos Aires
 ```
@@ -100,7 +102,7 @@ listing_df %>%
 ```
 Agora podemos concluir que os quartos compartilhados são os mais baratos. Tudo faz mais sentido agora, não acha?  
   
-Verificando correlações  
+## Verificando correlações  
 Antes, precisamos fazer alguns ajustes.  
 ```{r}
 listing_df$bathrooms_text <- str_replace_all(listing_df$bathrooms_text,'bath','')
@@ -153,7 +155,7 @@ price_month <- calendar_df %>%
 price_month
 ```
   
-### 3 Data Preparation  
+# Data Preparation  
 Excluindo colunas vazias, com url, localização, comentários, nomes do host pois não serão usadas nesta análise.   
 ```{r}
 listing_df <- subset(listing_df, select = -c(id, listing_url, scrape_id, picture_url,host_id, host_url, 
@@ -163,7 +165,7 @@ listing_df <- subset(listing_df, select = -c(id, listing_url, scrape_id, picture
                                              host_about,description, name, host_name, first_review, last_review))
 ```
   
-Formatando colunas  
+## Formatando colunas  
 - bedrooms tem 3058 valores NA. Talvez esse imóvel seja um studio, quarta-sala ou algo do tipo e por isso o proprietário esteja considerando que não há quarto, então vou inserir 1 no lugar desses NAs.  
 - beds também receberá 1 no lugar de NA, pois pode ser um sofá-cama e por isso não foi classificado como cama.  
 - bathrooms_text também receberá 1.  
@@ -176,7 +178,7 @@ listing_df$number_of_reviews[is.na(listing_df$number_of_reviews)] <- 0
 listing_df$reviews_per_month[is.na(listing_df$reviews_per_month)] <- 0
 ```
   
-Transformando variáveis lógicas em binárias  
+## Transformando variáveis lógicas em binárias  
 ```{r}
 #verificando quais são as variáveis lógicas presentes no dataset
 (to.replace <- names(which(sapply(listing_df, is.logical))))
@@ -190,7 +192,7 @@ for(j in Cols){
 }
 ```
   
-Transformando variáveis qualitativas em factor  
+## Transformando variáveis qualitativas em factor  
 ```{r}
 listing_df$source <- as.factor(listing_df$source)
 listing_df$property_type <- as.factor(listing_df$property_type)
@@ -200,7 +202,7 @@ listing_df$neighbourhood_cleansed <- as.factor(listing_df$neighbourhood_cleansed
 listing_df$room_type <- as.factor(listing_df$room_type)
 ```
   
-Ajustando as variáveis:  
+## Ajustando as variáveis:  
 - host_verification  
 - amenities  
 - host_acceptance_rate  
@@ -219,8 +221,8 @@ Depois de uma breve análise, observei que as variáveis abaixo não são releva
 listing_df <- subset(listing_df, select = -c(last_scraped, calendar_last_scraped))
 ```
   
-Tratando outliers  
-* Função criada para identificação de outliers através do método de quartil  
+## Tratando outliers  
+Função criada para identificação de outliers através do método de quartil  
 ```{r}
 quartil <- function(column){
   
@@ -293,7 +295,7 @@ listing_df <- subset(listing_df, select = -c(review_scores_accuracy, review_scor
 ```
 As variáveis com score foram excluídas porquê tem uma quantidade muito elevada de NAs, portanto manter eslas pode influênciar muito no resultado final do modelo.
   
-Tratando variáveis qualitativas  
+## Tratando variáveis qualitativas  
 
 Neste dataset, temos uma quantidade significativa de preditoras qualitativas, que contém até mais de 50 categorias cada.  Diante disso, devem passar por um tratamento específico, afim de reduzir sua dimensionalidade e depois disso serem introduzidas no modelo novamente. Por isso, nesta análise vou dropar essas variáveis e manter no modelo apenas a variável room_type(dummy).  
 Isso torna viável rodar nosso modelo. Estou trabalhando para no futuro trazer outra abordagem, já com essas preditoras qualitativas inclusas no modelo, e  assim, comparar e analisar qual modelo tem melhor capacidade preditiva para este estudo.   
@@ -312,11 +314,11 @@ listing_df_1_dummies <- dummy_columns(.data = listing_df,
 summary(listing_df_1_dummies)
 ```
 
-### 4 Modeling  
+# Modeling  
   
-ESTIMAÇÃO DA REGRESSÃO LINEAR MÚLTIPLA   
+## Estimação da regressão linear múltipla     
   
-Modelagem com todas as variáveis  
+### Modelagem com todas as variáveis  
 ```{r include=FALSE}
 modelo_listing <- lm(price ~ ., listing_df_1_dummies)
 ```
@@ -324,8 +326,8 @@ modelo_listing <- lm(price ~ ., listing_df_1_dummies)
 summary(modelo_listing)
 ```
   
-Procedimento Step-wise no modelo  
-```{r echo=FALSE}
+### Procedimento Step-wise no modelo  
+```{r include=FALSE}
 step_modelo_listing <- step(modelo_listing, k = 3.841459)
 ```
 ```{r}
@@ -333,7 +335,7 @@ summary(step_modelo_listing)
 ```
 
 Kernel density estimation (KDE)  
-```{r}
+```{r warning=FALSE}
 listing_df_1_dummies %>%
   ggplot() +
   geom_density(aes(x = step_modelo_listing$residuals), fill = "#55C667FF") +
@@ -341,7 +343,7 @@ listing_df_1_dummies %>%
        y = "Densidade") +
   theme_bw()
 ```  
-Teste de aderência dos resíduos à normalidade   
+### Teste de aderência dos resíduos à normalidade   
 ```{r}
 sf_teste <- function (x) 
 {
@@ -367,7 +369,7 @@ sf_teste <- function (x)
 sf_teste(step_modelo_listing$residuals)
 ```
   
-Histograma
+### Histograma
 ```{r}
 listing_df_1_dummies %>%
   mutate(residuos = step_modelo_listing$residuals) %>%
@@ -389,19 +391,19 @@ listing_df_1_dummies %>%
   
 O teste de Shapiro-Francia comprovou a não derência à normalidade dos resíduos. Diante disso, vou fazer uma transformação Box-Cox na variável dependente e rodar novo modelo.  
   
-TRANSFORMAÇÃO BOX-COX  
+### Transformação Box-Cox   
 ```{r}
 lambda_BC <- powerTransform(listing_df_1_dummies$price)
 lambda_BC
 ```
   
-Inserindo o lambda de Box-Cox na base de dados para a estimação de um novo modelo  
+### Inserindo o lambda de Box-Cox na base de dados para a estimação de um novo modelo  
 ```{r}
 listing_df_1_dummies$bcprice <- (((listing_df_1_dummies$price ^ lambda_BC$lambda) - 1) / 
                          lambda_BC$lambda)
 ```
   
-Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox  
+### Estimando um novo modelo múltiplo com variável dependente transformada por Box-Cox  
 ```{r}
 modelo_listing_bc <- lm(formula = bcprice ~ . -price, na.rm = T,
                         data = listing_df_1_dummies)
@@ -417,18 +419,18 @@ step_modelo_listing_bc <- step(modelo_listing_bc, k=3.841459)
 summary(step_modelo_listing_bc)
 ```
 
-Teste de shapiro francia  
+### Teste de Shapiro-Francia  
 ```{r}
 sf_teste(step_modelo_listing_bc$residuals)
 ```
   
-Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox  
+### Diagnóstico de Heterocedasticidade para o Modelo Stepwise com Box-Cox  
 ```{r}
 ols_test_breusch_pagan(step_modelo_listing_bc)
 ```
 Além dos resíduos não serem aderentes à normalidade, também observamos que o teste de heterocedasticidade aponta que há variáveis omissas que seriam relevantes para explicar Y.  
   
-Resumo dos dois modelos obtidos pelo procedimento Stepwise (linear e com Box-Cox)  
+### Resumo dos dois modelos obtidos pelo procedimento Stepwise (linear e com Box-Cox)  
 ```{r}
 export_summs(step_modelo_listing, step_modelo_listing_bc,
              model.names = c("Modelo Linear","Modelo Box-Cox"),
@@ -443,7 +445,7 @@ listing_df$yhat_step_modelo_bc <- (((step_modelo_listing_bc$fitted.values*(lambd
 ```
   
 
-Visualizando os dois fitted values no dataset  
+### Visualizando os dois fitted values no dataset  
 ```{r}
 listing_df %>%
   select(price, yhat_step_listing, yhat_step_modelo_bc) %>%
@@ -453,7 +455,7 @@ listing_df %>%
                 font_size = 22)
 ```
   
-Ajustes dos modelos: valores previstos (fitted values) X valores reais
+### Ajustes dos modelos: valores previstos (fitted values) X valores reais
 ```{r}
 listing_df %>%
   ggplot() +
@@ -476,6 +478,6 @@ listing_df %>%
         panel.border = element_rect(NA),
         legend.position = "bottom")
 ```
-**Conclusão**
+# Conclusão
 
 
