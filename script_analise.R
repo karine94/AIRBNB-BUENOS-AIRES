@@ -16,7 +16,7 @@
 
 pacotes <- c("plotly","tidyverse","ggrepel","fastDummies","knitr","kableExtra",
              "splines","reshape2","PerformanceAnalytics","correlation","see",
-             "ggraph", "car", "olsrr", "jtools")
+             "ggraph", "car", "olsrr", "jtools", "ggside", "ggplot2", "tidyquant")
 
 
 options(rgl.debug = TRUE)
@@ -49,16 +49,26 @@ listing_df %>%
   ggplot(aes(x = neighbourhood_cleansed, y = qtd_bairros, fill=neighbourhood_cleansed)) +
   theme(axis.text.x = element_text(angle = 90))+
   geom_col()
-  
 #Caso você vá até Buenos Aires, estes são os bairros em que você tem maiores chances de encontrar uma acomodação.
 
-#Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
-#Para calcular a média, precisamos fazer uns ajustes na coluna "price", removendo $ e a vírgula.
 
+#Média de preço por bairro, considerando os 5 mais caros
+#Para calcular a média, precisamos fazer uns ajustes na coluna "price", removendo $ e a vírgula.
 listing_df$price <- str_replace_all(listing_df$price,'[$]','')
 listing_df$price <- str_replace_all(listing_df$price,',','')
 listing_df$price <- as.numeric(listing_df$price)
 
+listing_df %>%
+  group_by(neighbourhood_cleansed) %>%
+  summarise(avg_price = mean(price)) %>%
+  slice_max(avg_price, n=5) %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = F,
+                font_size = 22)
+
+
+#Considerando os tipos de quartos disponíveis, Qual a média de preço em cada um deles?
 listing_df %>%
   group_by(room_type) %>%
   summarise(avg_price = mean(price)) %>%
@@ -66,6 +76,8 @@ listing_df %>%
   kable_styling(bootstrap_options = "striped",
                 full_width = F,
                 font_size = 22)
+
+
 
 #Quando se vai a Buenos Aires é mais caro ficar em hotel.
 #Entretando é um pouco estranho que um quarto privado seja mais
@@ -110,19 +122,16 @@ calendar_df$price <- as.numeric(calendar_df$price)
 price_month <- calendar_df %>%
   group_by(month) %>%
   summarise(median_price = median(price)) %>%
-  ggplot(aes(x = month, y = median_price)) +
-  geom_line(color='green') +
+  ggplot(aes(x = month, y = median_price, group=1)) +
+  geom_line(col="grey") +
   geom_point() +
-  theme(axis.text.x = element_text(angle=90)) +
+  
+   +
   labs(x= 'Month', y= 'Median Price',
        title = 'Price per month') +
   theme_classic()
 price_month
 
-#Verificando correlações
-
-names(listing_df)
-chart.Correlation((listing_df[,c(22,18,19,20)]), histogram = TRUE)
 
 #Pelo visto o preço não é tão influenciado assim pela quantidade de banheiros, quartos e camas, 
 #já que a correção entre o preço e essas variáveis não é tão significativa.
@@ -303,6 +312,10 @@ listing_df_1_dummies <- dummy_columns(.data = listing_df,
 glimpse(listing_df)
 summary(listing_df_1_dummies)
 
+#Verificando correlações
+
+names(listing_df)
+chart.Correlation((listing_df[,c(22,18,19,20)]), histogram = TRUE)
 
 #Modeling
 
@@ -398,18 +411,7 @@ ols_test_breusch_pagan(step_modelo_listing_bc)
 #que o teste de heterocedasticidade aponta que há variáveis omissas que seriam
 #relevantes para explicar Y.
 
-#Resumo dos dois modelos obtidos pelo procedimento Stepwise (linear e com Box-Cox)
-#Função 'export_summs' do pacote 'jtools'
-export_summs(step_modelo_listing, step_modelo_listing_bc,
-             model.names = c("Modelo Linear","Modelo Box-Cox"),
-             scale = F, digits = 6)
 
-
-#Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
-#comparação
-listing_df$yhat_step_listing <- step_modelo_listing$fitted.values
-listing_df$yhat_step_modelo_bc <- (((step_modelo_listing_bc$fitted.values*(lambda_BC$lambda))+
-                                      1))^(1/(lambda_BC$lambda))
 
 
 #Plotando os novos resíduos do modelo step_modelo_listing_bc com curva normal teórica
@@ -430,6 +432,24 @@ listing_df_1_dummies %>%
        y = "Frequência") +
   theme_bw()
 
+
+
+#Resumo dos dois modelos obtidos pelo procedimento Stepwise (linear e com Box-Cox)
+#Função 'export_summs' do pacote 'jtools'
+export_summs(step_modelo_listing, step_modelo_listing_bc,
+             model.names = c("Modelo Linear","Modelo Box-Cox"),
+             scale = F, digits = 6)  #Aqui os parâmetros não são diretamente comparáveis devido a transformação Box-Cox
+
+
+
+#Vou adicionar ao dataset valores de Yhat com stepwise e stepwise + Box-Cox para fins de 
+#comparação
+listing_df$yhat_step_listing <- step_modelo_listing$fitted.values
+listing_df$yhat_step_modelo_bc <- (((step_modelo_listing_bc$fitted.values*(lambda_BC$lambda))+
+                                      1))^(1/(lambda_BC$lambda)) #Esse calculo ajusta o Yhat oriundo da Box-Cox, tornando os parâmetros comparáveis.
+
+
+
 #Visualizando os dois fitted values no dataset
 listing_df %>%
   select(price, yhat_step_listing, yhat_step_modelo_bc) %>%
@@ -438,6 +458,13 @@ listing_df %>%
                 full_width = F, 
                 font_size = 22)
 
+#Comparando o R2 dos modelos
+data.frame("R2 OLS" = round(summary(step_modelo_listing)$r.squared, 4),
+           "R2 BoxCox" = round(summary(step_modelo_listing_bc)$r.squared, 4)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", position = "center", 
+                full_width = F, 
+                font_size = 30)
 
 #Ajustes dos modelos: valores previstos (fitted values) X valores reais
 listing_df %>%
@@ -461,5 +488,29 @@ listing_df %>%
         panel.border = element_rect(NA),
         legend.position = "bottom")
 
+
+#Visualização do comportamento dos resíduos em função dos fitted values do
+#do modelo BOX-COX, com destaque para as distribuições das variáveis
+#(pacote 'ggside')
+listing_df %>%
+  ggplot(aes(x = step_modelo_listing_bc$fitted.values, y = step_modelo_listing_bc$residuals)) +
+  geom_point(color = "#FDE725FF", size = 2.5) +
+  geom_smooth(aes(color = "Fitted Values"),
+              method = "lm", formula = y ~ x, se = F, size = 2) +
+  geom_xsidedensity(aes(y = after_stat(density)),
+                    alpha = 0.5,
+                    size = 1,
+                    position = "stack") +
+  geom_ysidedensity(aes(x = after_stat(density)),
+                    alpha = 0.5,
+                    size = 1,
+                    position = "stack") +
+  xlab("Fitted Values") +
+  ylab("Resíduos") +
+  scale_color_tq() +
+  scale_fill_tq() +
+  theme_tq() +
+  theme(ggside.panel.scale.x = 0.4,
+        ggside.panel.scale.y = 0.4)
 
 
